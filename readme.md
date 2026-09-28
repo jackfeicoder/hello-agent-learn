@@ -456,6 +456,10 @@ graph LR
 3. **工具反射与调用**：通过 `tool_executor.get_tool(tool_name)` 动态反射调用 Python 函数；
 4. **历史记忆更新**：将每一轮的 Action 与 Observation 追加到 `self.history`。
 
+
+
+![image-20260928203328353](C:\Users\25457\AppData\Roaming\Typora\typora-user-images\image-20260928203328353.png)
+
 ---
 
 #### 4.2.9 运行实例与日志分析

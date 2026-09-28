@@ -10,6 +10,7 @@ secret.txt
 node_modules/
 dist/
 venv/
+.venv/
 .idea/
 
 # 4. 仅忽略根目录下的文件，不忽略子目录里的（开头加 /）

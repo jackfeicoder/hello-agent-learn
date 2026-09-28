@@ -22,7 +22,7 @@ llm = OpenAICompatibleClient(
     base_url=BASE_URL
 )
 # 5. 初始化用户请求与历史记录
-user_prompt = "你好，请帮我查询一下今天北京的天气，然后根据天气推荐一个合适的旅游景点。"
+user_prompt = "你好，请帮我查询一下今天哈尔滨的天气，然后根据天气推荐一个合适的旅游景点。"
 prompt_history = [f"用户请求: {user_prompt}"]
 print(f"用户输入: {user_prompt}\n" + "="*40)
 # 6. 运行 ReAct 主循环

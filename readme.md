@@ -350,13 +350,14 @@ graph TD
 
 ### 2. ReAct 范式深度解析
 
-#### (1) 从思维链 (CoT) 到 ReAct
+#### 2.1 基础概念
+(1) 从思维链 (CoT) 到 ReAct
 - **思维链 (Chain-of-Thought)**：引导模型展示推理步骤，但只能基于参数记忆，**无法与外部环境交互**，容易产生事实性幻觉；
 - **ReAct**（由 Shunyu Yao 于 2022 年提出）：将**推理（Reasoning）**与**行动（Acting）**深度结合：
   - 推理使行动更具目的性；
   - 行动为推理提供外部客观事实支撑。
 
-#### (2) ReAct 闭环核心三要素
+#### 2.2 ReAct 闭环核心三要素
 
 ```text
 Thought (内心独白) ──> Action (调用工具) ──> Observation (获取结果) ──> 追加历史 ──> 循环迭代
@@ -366,7 +367,7 @@ Thought (内心独白) ──> Action (调用工具) ──> Observation (获取
 - **Action（行动）**：决定执行的具体操作，通常是调用外部工具，格式如 `Search['哈尔滨今天天气']` 或终结指令 `Finish[最终答案]`。
 - **Observation（观察）**：执行工具后由外部环境返回的客观结果（如搜索摘要、API 响应）。
 
-#### (3) ReAct 完整执行生命周期
+#### 2.3 ReAct 完整执行生命周期
 
 ```mermaid
 graph TD
@@ -388,7 +389,7 @@ graph TD
 
 ---
 
-### 3. 模块化工程实现
+#### 2.4 模块化工程实现
 
 本章代码采用解耦的模块化结构实现，目录组织如下：
 
@@ -408,12 +409,12 @@ Chapter04/
 
 ---
 
-#### (1) LLM 客户端封装 ([Chapter04/HelloAgent.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/HelloAgent.py))
+#### 2.5 LLM 客户端封装 ([Chapter04/HelloAgent.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/HelloAgent.py))
 封装 `HelloAgentsLLM` 类，通过读取环境变量实现大模型接口的统一配置与流式响应（Stream），支持 DeepSeek、阿里云通义、商汤日日新等任意 OpenAI 兼容服务。
 
 ---
 
-#### (2) 工具定义与通用执行器
+#### 2.6 工具定义与通用执行器
 
 一个合格的 Agent 工具必须包含**三核心要素**：
 1. **名称 (Name)**：唯一标识符（如 `Search`）；
@@ -437,7 +438,7 @@ graph LR
 
 ---
 
-#### (3) 提示词模板设计 ([Chapter04/prompts/__init__.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/prompts/__init__.py))
+#### 2.7 提示词模板设计 ([Chapter04/prompts/__init__.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/prompts/__init__.py))
 
 模板强制约束了模型输出的语法协议，确保能够被正则可靠解析：
 - **角色定位**：设定智能助手人设；
@@ -447,7 +448,7 @@ graph LR
 
 ---
 
-#### (4) ReActAgent 核心驱动逻辑 ([Chapter04/ReActAgent.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/ReActAgent.py))
+#### 2.8 ReActAgent 核心驱动逻辑 ([Chapter04/ReActAgent.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/ReActAgent.py))
 
 智能体由以下几个关键机制构成闭环：
 1. **主循环 (`run`)**：以 `max_steps` 作为安全保护锁，控制最大推理深度；
@@ -457,7 +458,7 @@ graph LR
 
 ---
 
-### 4. 运行实例与日志分析
+#### 2.9 运行实例与日志分析
 
 在终端执行 ReActAgent 查询实时天气：
 
@@ -503,3 +504,5 @@ Action: Finish[今天哈尔滨天气为多云转晴，气温约 19/9℃，风力
 > - **第 1 轮**：模型判断自身缺乏当天的实时天气数据，触发推理决策（Thought），决定调用 `Search[哈尔滨今天天气]`（Action）；
 > - **环境反馈**：SerpApi 返回哈尔滨的客观天气预报并注入记忆上下文（Observation）；
 > - **第 2 轮**：模型在包含了最新天气的完整上下文中推理，认为信息充分，果断输出 `Finish[...]` 给出最终答案，完成闭环！
+
+### 3. Plan-and-Solve (计划后执行) 详解

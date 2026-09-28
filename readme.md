@@ -161,7 +161,7 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph 阶段1：匹配打分
+    subgraph sub1 ["阶段1：匹配打分"]
         Q["当前词 '她' 的 Query (Q)"]
         K1["'小明' 的 Key (K): 0.10"]
         K2["'苹果' 的 Key (K): 0.02"]
@@ -173,7 +173,7 @@ graph TD
         Q -->|点积匹配| K4
     end
 
-    subgraph 阶段2：信息加权融合
+    subgraph sub2 ["阶段2：信息加权融合"]
         K3 -->|最高注意力权重 Softmax| V["提取 '小红' 的 Value (V) 内容"]
         V --> OUT["生成 '她' 的上下文向量<br/>(明确指代 '小红')"]
     end
@@ -351,6 +351,7 @@ graph TD
 ### 4.2. ReAct 范式深度解析
 
 #### 4.2.1 基础概念
+
 (1) 从思维链 (CoT) 到 ReAct
 - **思维链 (Chain-of-Thought)**：引导模型展示推理步骤，但只能基于参数记忆，**无法与外部环境交互**，容易产生事实性幻觉；
 - **ReAct**（由 Shunyu Yao 于 2022 年提出）：将**推理（Reasoning）**与**行动（Acting）**深度结合：
@@ -368,6 +369,8 @@ Thought (内心独白) ──> Action (调用工具) ──> Observation (获取
 - **Observation（观察）**：执行工具后由外部环境返回的客观结果（如搜索摘要、API 响应）。
 
 #### 4.2.3 ReAct 完整执行生命周期
+
+![image-20260928204012303](images/image-20260928204012303.png)
 
 ```mermaid
 graph TD
@@ -409,7 +412,7 @@ Chapter04/
 
 ---
 
-#### 4.2.5 LLM 客户端封装 ([Chapter04/HelloAgent.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/HelloAgent.py))
+#### 4.2.5 LLM 客户端封装 ([Chapter04/HelloAgent.py](Chapter04/HelloAgent.py))
 封装 `HelloAgentsLLM` 类，通过读取环境变量实现大模型接口的统一配置与流式响应（Stream），支持 DeepSeek、阿里云通义、商汤日日新等任意 OpenAI 兼容服务。
 
 ---
@@ -431,14 +434,14 @@ graph LR
     style D fill:#e8f5e9,stroke:#388e3c
 ```
 
-- **搜索工具**（[Chapter04/tools/search_tool.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/tools/search_tool.py)）：  
+- **搜索工具**（[Chapter04/tools/search_tool.py](Chapter04/tools/search_tool.py)）：  
   接入 SerpApi 网页检索，并实现**智能降级解析**（优先返回直接答案框 `answer_box` 与知识图谱 `knowledge_graph`，无直接答案时降级返回前 3 条自然搜索结果摘要）。
-- **执行调度器**（[Chapter04/tool_executor.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/tool_executor.py)）：  
+- **执行调度器**（[Chapter04/tool_executor.py](Chapter04/tool_executor.py)）：  
   提供 `register_tool`、`get_tool` 与 `get_available_tools` 接口，解耦工具定义与智能体主体。
 
 ---
 
-#### 4.2.7 提示词模板设计 ([Chapter04/prompts/__init__.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/prompts/__init__.py))
+#### 4.2.7 提示词模板设计 ([Chapter04/prompts/__init__.py](Chapter04/prompts/__init__.py))
 
 模板强制约束了模型输出的语法协议，确保能够被正则可靠解析：
 - **角色定位**：设定智能助手人设；
@@ -448,7 +451,7 @@ graph LR
 
 ---
 
-#### 4.2.8 ReActAgent 核心驱动逻辑 ([Chapter04/ReActAgent.py](file:///e:/Desktop/github/hello-agent-learn/Chapter04/ReActAgent.py))
+#### 4.2.8 ReActAgent 核心驱动逻辑 ([Chapter04/ReActAgent.py](Chapter04/ReActAgent.py))
 
 智能体由以下几个关键机制构成闭环：
 1. **主循环 (`run`)**：以 `max_steps` 作为安全保护锁，控制最大推理深度；
@@ -456,9 +459,7 @@ graph LR
 3. **工具反射与调用**：通过 `tool_executor.get_tool(tool_name)` 动态反射调用 Python 函数；
 4. **历史记忆更新**：将每一轮的 Action 与 Observation 追加到 `self.history`。
 
-
-
-![image-20260928203328353](C:\Users\25457\AppData\Roaming\Typora\typora-user-images\image-20260928203328353.png)
+![image-20260928203328353](images/image-20260928203328353.png)
 
 ---
 
@@ -546,7 +547,7 @@ Action: Finish[今天哈尔滨天气为多云转晴，气温约 19/9℃，风力
 - **规划阶段 (Planning Phase)**：Agent接受用户输入发给大模型将用户问题分解，并制定出一个清晰、分步骤的行动计划。
 - **执行阶段 (Solving Phase)**：Agent严格按照计划中的步骤，逐一执行。每一步的执行都可能是一次独立的 LLM 调用，或者是对上一步结果的加工处理，直到计划中的所有步骤都完成，最终得出答案。（无依赖关系的子任务/步骤可以并行处理，从而提高效率。有依赖关系的子任务/步骤需要串行处理。）
 
-![image-20260928165631462](https://gitee.com/jackfei2545/typora-images/raw/master/image-20260928165631462-2026-9-2816:57:17.png)
+![image-20260928165631462](images/image-20260928165631462.png)
 
 #### 4.3.2 工程实现与运行
 不使用工具的方式，而是通过提示词的设计，完成一个推理任务。答案无法通过单次查询或计算得出，必须先将问题分解为一系列逻辑连贯的子步骤，然后按顺序求解。发挥 Plan-and-Solve “先规划，后执行”的核心能力。

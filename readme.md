@@ -878,116 +878,196 @@ n8n 则以其独特的"连接"能力开辟了另一条路径。通过"智能邮�
 基于私有知识库的问答系统、智能客服: 优先选择 FastGPT
 深度业务集成、通用自动化流程: 优先选择 n8n
 
-## 第六章 框架开发实践
+---
+
+## 六、第六章：框架开发实践
 
 一个框架的本质，是提供一套经过验证的“规范”。它将所有智能体共有的、重复性的工作（如主循环、状态管理、工具调用、日志记录等）进行抽象和封装，让我们在构建新的智能体时，能够专注于其独特的业务逻辑，而非通用的底层实现。
 
-提升代码复用与开发效率：这是最直接的价值。一个好的框架会提供一个通用的 Agent 基类或执行器，它封装了智能体运行的核心循环（Agent Loop）。无论是 ReAct 还是 Plan-and-Solve，都可以基于框架提供的标准组件快速搭建，从而避免重复劳动。
-实现核心组件的解耦与可扩展性：一个健壮的智能体系统应该由多个松散耦合的模块组成。框架的设计会强制我们分离不同的关注点：
-模型层 (Model Layer)：负责与大语言模型交互，可以轻松替换不同的模型（OpenAI, Anthropic, 本地模型）。
-工具层 (Tool Layer)：提供标准化的工具定义、注册和执行接口，添加新工具不会影响其他代码。
-记忆层 (Memory Layer)：处理短期和长期记忆，可以根据需求切换不同的记忆策略（如滑动窗口、摘要记忆）。 这种模块化的设计使得整个系统极具可扩展性，更换或升级任何一个组件都变得简单。
-标准化复杂的状态管理：我们在 ReflectionAgent 中实现的 Memory 类只是一个简单的开始。在真实的、长时运行的智能体应用中，状态管理是一个巨大的挑战，它需要处理上下文窗口限制、历史信息持久化、多轮对话状态跟踪等问题。一个框架可以提供一套强大而通用的状态管理机制，开发者无需每次都重新处理这些复杂问题。
-简化可观测性与调试过程：当智能体的行为变得复杂时，理解其决策过程变得至关重要。一个精心设计的框架可以内置强大的可观测性能力。例如，通过引入事件回调机制（Callbacks），我们可以在智能体生命周期的关键节点（如 on_llm_start, on_tool_end, on_agent_finish）自动触发日志记录或数据上报，从而轻松地追踪和调试智能体的完整运行轨迹。这远比在代码中手动添加 print 语句要高效和系统化。
+### 核心价值
+- **提升代码复用与开发效率**：封装通用的 Agent 执行主循环（Agent Loop），标准化 ReAct 或 Plan-and-Solve 执行流程，避免重复劳动。
+- **实现核心组件的解耦与可扩展性**：
+  - **模型层 (Model Layer)**：统一 LLM 调用接口，无缝切换不同厂商大模型或本地模型；
+  - **工具层 (Tool Layer)**：标准化工具注册、参数校验与执行接口，新增工具不侵入业务逻辑；
+  - **记忆层 (Memory Layer)**：标准化短期/长期记忆管理与策略（如滑动窗口、摘要记忆）。
+- **标准化复杂的状态管理**：统一管理上下文窗口限制、历史信息持久化与多轮对话状态跟踪。
+- **内置可观测性与调试支持**：通过生命周期回调（Callbacks）在关键节点（如 `on_llm_start`, `on_tool_end`）自动记录与排查，告别散乱的 `print` 调试。
 
-### 6.1 主流框架的选型与对比
-utoGen：AutoGen 的核心思想是通过对话实现协作[1]。它将多智能体系统抽象为一个由多个“可对话”智能体组成的群聊。开发者可以定义不同角色（如 Coder, ProductManager, Tester），并设定它们之间的交互规则（例如，Coder 写完代码后由 Tester 自动接管）。任务的解决过程，就是这些智能体在群聊中通过自动化消息传递，不断对话、协作、迭代直至最终目标达成的过程。
-AgentScope：AgentScope 是一个专为多智能体应用设计的、功能全面的开发平台[2]。它的核心特点是易用性和工程化。它提供了一套非常友好的编程接口，让开发者可以轻松定义智能体、构建通信网络，并管理整个应用的生命周期。其内置的消息传递机制和对分布式部署的支持，使其非常适合构建和运维复杂、大规模的多智能体系统。
-CAMEL：CAMEL 提供了一种新颖的、名为角色扮演 (Role-Playing) 的协作方法[3]。其核心理念是，我们只需要为两个智能体（例如，AI研究员 和 Python程序员）设定好各自的角色和共同的任务目标，它们就能在“初始提示 (Inception Prompting)”的引导下，自主地进行多轮对话，相互启发、相互配合，共同完成任务。它极大地降低了设计多智能体对话流程的复杂度。
-LangGraph：作为 LangChain 生态的扩展，LangGraph 另辟蹊径，将智能体的执行流程建模为图 (Graph)[4]。在传统的链式结构中，信息只能单向流动。而 LangGraph 将每一步操作（如调用LLM、执行工具）定义为图中的一个节点 (Node)，并用边 (Edge) 来定义节点之间的跳转逻辑。这种设计天然支持循环 (Cycles)，使得实现如 Reflection 这样的迭代、修正、自我反思的复杂工作流变得异常简单和直观。
+---
 
-### 6.2 框架一：AutoGen
-以对话驱动协作"。它巧妙地将复杂的任务解决流程，映射为不同角色的智能体之间的一系列自动化对话。
+### 6.1 主流框架选型与对比
 
-分层设计： 框架被拆分为两个核心模块：
-autogen-core：作为框架的底层基础，封装了与语言模型交互、消息传递等核心功能。它的存在保证了框架的稳定性和未来扩展性。
-autogen-agentchat：构建于 core 之上，提供了用于开发对话式智能体应用的高级接口，简化了多智能体应用的开发流程。 这种分层策略使得各组件职责明确，降低了系统的耦合度。
-异步优先： 新架构全面转向异步编程 (async/await)。在多智能体协作场景中，网络请求（如调用 LLM API）是主要耗时操作。异步模式允许系统在等待一个智能体响应时处理其他任务，从而避免了线程阻塞，显著提升了并发处理能力和系统资源的利用效率。
-智能体是执行任务的基本单元。在 0.7.4 版本中，智能体的设计更加专注和模块化。
+- **AutoGen**：微软开源的多智能体框架。核心思想为“以对话驱动协作”，将复杂任务分解为不同角色智能体（如 Coder、Tester、ProductManager）之间的自动化群聊互动。
+- **AgentScope**：专为多智能体设计的工程化开发平台，主打消息驱动架构与高并发支持，提供极具生产可用性的运行时与可视化 Studio。
+- **CAMEL**：主打“角色扮演 (Role-Playing)”的多智能体协作模式，通过 Inception Prompting 让两个角色互相对话协作（如股票交易员提出需求，程序员编写代码）。
+- **LangGraph**：LangChain 生态演进出的图状态机框架，将 Agent 建模为有向图（Nodes & Edges），天然支持条件分支与反思纠错循环（Cycles），兼具极高的确定性与灵活性。
 
-AssistantAgent (助理智能体)： 这是任务的主要解决者，其核心是封装了一个大型语言模型（LLM）。它的职责是根据对话历史生成富有逻辑和知识的回复，例如提出计划、撰写文章或编写代码。通过不同的系统消息（System Message），我们可以为其赋予不同的“专家”角色。
-UserProxyAgent (用户代理智能体)： 这是 AutoGen 中功能独特的组件。它扮演着双重角色：既是人类用户的“代言人”，负责发起任务和传达意图；又是一个可靠的“执行器”，可以配置为执行代码或调用工具，并将结果反馈给其他智能体。这种设计清晰地区分了“思考”（由 AssistantAgent 完成）与“行动”。
+---
 
-综合来看就是设置多个角色，比如产品经理、测试、开发等，用户提出需求后它们互相对话完成任务。
+### 6.2 框架详解：AutoGen
 
-### 6.3 框架二：AgentScope
+- **核心理念**：“以对话驱动协作”，将复杂任务解决流程映射为不同角色智能体间的一系列自动化对话。
+- **分层设计**：
+  - `autogen-core`：底层基础，封装与语言模型的交互、消息传递等核心功能，保证系统稳定性与可扩展性；
+  - `autogen-agentchat`：上层高级接口，用于快速开发对话式智能体应用，降低系统耦合度。
+- **异步优先**：全链路转向异步编程（`async/await`），避免 I/O 阻塞，显著提升多智能体并发性能。
+- **核心角色划分**：
+  - `AssistantAgent`（助理智能体）：负责推理、规划与编码，封装大语言模型；
+  - `UserProxyAgent`（用户代理智能体）：既是用户的“代言人”，又是工具与代码的“执行器”，实现思考与行动的清晰解耦。
 
-在这个架构中，最底层是基础组件层 (Foundational Components)，它为整个框架提供了核心的构建块。Message 组件定义了统一的消息格式，支持从简单的文本交互到复杂的多模态内容；Memory 组件提供了短期和长期记忆管理；Model API 层抽象了对不同大语言模型的调用；而 Tool 组件则封装了智能体与外部世界交互的能力。
+---
 
-在基础组件之上，智能体基础设施层 (Agent-level Infrastructure) 提供了更高级的抽象。这一层不仅包含了各种预构建的智能体（如浏览器使用智能体、深度研究智能体），还实现了经典的 ReAct 范式，支持智能体钩子、并行工具调用、状态管理等高级特性。特别值得注意的是，这一层原生支持异步执行与实时控制，这是 AgentScope 相比其他框架的一个重要优势。
+### 6.3 框架详解：AgentScope
 
-多智能体协作层 (Multi-Agent Cooperation) 是 AgentScope 的核心创新所在。MsgHub 作为消息中心，负责智能体间的消息路由和状态管理；而 Pipeline 系统则提供了灵活的工作流编排能力，支持顺序、并发等多种执行模式。这种设计使得开发者可以轻松构建复杂的多智能体协作场景。
+- **四层架构体系**：
+  1. **基础组件层 (Foundational Components)**：提供 Message 消息模型、Memory 记忆管理、Model API 模型适配与 Tool 工具封装；
+  2. **智能体基础设施层 (Agent-level Infrastructure)**：包含预置 Agent、ReAct 范式、钩子机制与并行工具调用，原生支持异步与实时控制；
+  3. **多智能体协作层 (Multi-Agent Cooperation)**：通过 `MsgHub` 负责中心化消息路由与状态管理，`Pipeline` 负责灵活工作流编排；
+  4. **开发与部署层 (Deployment & Development)**：包含 AgentScope Runtime 生产运行时环境与 AgentScope Studio 可视化开发套件。
+- **核心创新**：基于**消息驱动架构（Message-Driven Architecture）**，所有交互均抽象为标准化消息的收发，而非传统紧耦合函数调用。
 
-最上层的开发与部署层 (Deployment & Development)则体现了 AgentScope 对工程化的重视。AgentScope Runtime 提供了生产级的运行时环境，而 AgentScope Studio 则为开发者提供了完整的可视化开发工具链。
+---
 
-AgentScope 的核心创新在于其消息驱动架构。在这个架构中，所有的智能体交互都被抽象为消息的发送和接收，而不是传统的函数调用。
+### 6.4 框架详解：CAMEL
 
-### 6.4 框架三：CAMEL
-CAMEL最初的核心目标是探索如何在最少的人类干预下，让两个智能体通过“角色扮演”自主协作解决复杂任务。
-一个扮演“AI 用户” (AI User)，负责提出需求、下达指令和构思任务步骤；另一个则扮演“AI 助理” (AI Assistant)，负责根据指令执行具体操作和提供解决方案。
-例如，在一个“开发股票交易策略分析工具”的任务中：
+- **核心理念**：通过最小化人工干预，使两个互补角色在“角色扮演”中自主协作完成复杂工程：
+  - **AI 用户 (AI User)**：例如“资深股票交易员”，懂业务、懂策略，负责提出需求与构思步骤；
+  - **AI 助理 (AI Assistant)**：例如“优秀 Python 程序员”，懂算法、懂实现，负责根据指令落地代码。
+- **执行机制**：通过初始提示（Inception Prompting）锁定任务目标，两位“跨领域专家”通过自主多轮对话，互相启发并协作完成单一角色无法胜任的复杂任务。
 
-AI 用户 的角色可能是一位“资深股票交易员”。它懂市场、懂策略，但不懂编程。
-AI 助理 的角色则是一位“优秀的 Python 程序员”。它精通编程，但对股票交易一无所知。
-通过这种设定，任务的解决过程就被自然地转化为一场两位“跨领域专家”之间的对话。交易员提出专业需求，程序员将其转化为代码实现，两者协作完成任何一方都无法独立完成的复杂任务。
+---
 
-### 6.5 框架四：LangGraph
-与前面介绍的基于“对话”的框架（如 AutoGen 和 CAMEL）不同，LangGraph 将智能体的执行流程建模为一种状态机（State Machine），并将其表示为有向图（Directed Graph）。在这种范式中，图的节点（Nodes）代表一个具体的计算步骤（如调用 LLM、执行工具），而边（Edges）则定义了从一个节点到另一个节点的跳转逻辑。这种设计的革命性之处在于它天然支持循环，使得构建能够进行迭代、反思和自我修正的复杂智能体工作流变得前所未有的直观和简单。
-三个基本构成要素。
-首先，是全局状态（State）。整个图的执行过程都围绕一个共享的状态对象进行。这个状态通常被定义为一个 Python 的 TypedDict，它可以包含任何你需要追踪的信息，如对话历史、中间结果、迭代次数等。所有的节点都能读取和更新这个中心状态。
-其次，是节点（Nodes）。每个节点都是一个接收当前状态作为输入、并返回一个更新后的状态作为输出的 Python 函数。节点是执行具体工作的单元。
-最后，是边（Edges）。边负责连接节点，定义工作流的方向。最简单的边是常规边，它指定了一个节点的输出总是流向另一个固定的节点。而 LangGraph 最强大的功能在于条件边（Conditional Edges）。它通过一个函数来判断当前的状态，然后动态地决定下一步应该跳转到哪个节点。这正是实现循环和复杂逻辑分支的关键。
-在定义了状态、节点和边之后，我们可以像搭积木一样将它们组装成一个可执行的工作流。
-LangGraph 将一个完整的实时问答流程，显式地定义为一个由状态、节点和边构成的“流程图”。这种设计的最大优势是高度的可控性与可预测性。开发者可以精确地规划智能体的每一步行为，这对于构建需要高可靠性和可审计性的生产级应用至关重要。其最强大的特性在于对循环（Cycles）的原生支持。通过条件边，我们可以轻松构建“反思-修正”循环，例如在我们的案例中，如果搜索失败，可以设计一个回退到备用方案的路径。这是构建能够自我优化和具备容错能力的智能体的关键。
+### 6.5 框架详解：LangGraph
 
-此外，由于每个节点都是一个独立的 Python 函数，这带来了高度的模块化。同时，在流程中插入一个等待人类审核的节点也变得非常直接，为实现可靠的“人机协作”（Human-in-the-loop）提供了坚实的基础。
+- **核心模型**：将智能体执行流程建模为**状态机（State Machine）**与**有向图（Directed Graph）**。
+- **三大核心要素**：
+  1. **全局状态 (State)**：基于 `TypedDict` 或 Pydantic 定义的共享状态对象，所有节点均可读取与增量更新；
+  2. **计算节点 (Nodes)**：接收当前状态作为输入，返回更新后状态的独立 Python 函数，代表具体计算或工具调用步骤；
+  3. **连接边 (Edges)**：
+     - **常规边**：确定节点间的固定单向流向；
+     - **条件边 (Conditional Edges)**：根据当前状态动态判断下一跳转节点，是实现分支流转与“反思-修正”循环（Cycles）的关键。
+- **优势与局限**：
+  - **优势**：高度可控与可预测，天然支持“人机协作”（Human-in-the-loop）和审核打断机制；
+  - **局限**：需编写较多状态与图定义的前期代码（Boilerplate），对简单线性任务开发略显繁琐。
+---
 
-（2）局限性
+## 七、第七章：构建你的智能体框架
 
-与基于对话的框架相比，LangGraph 需要开发者编写更多的前期代码（Boilerplate）。定义状态、节点、边等一系列操作，使得对于简单任务而言，开发过程显得更为繁琐。开发者需要更多地思考“如何控制流程（how）”，而不仅仅是“做什么（what）”。
+### 7.1 总体架构
 
+当前开源框架在实际落地中常面临几大痛点：
+- **过度抽象的复杂性**：许多框架为了追求通用性引入了大量抽象层和配置选项（如 LangChain 的链式机制），学习曲线陡峭；
+- **快速迭代带来的不稳定性**：商业化框架为了抢占市场频繁变更 API，导致版本升级后代码兼容与维护成本居高不下；
+- **黑盒化的实现逻辑**：核心封装过于严密，开发者难以透视内部工作流，缺乏深度定制能力；
+- **依赖关系的复杂性**：成熟框架常捆绑大量底层依赖，安装包体积庞大且极易产生依赖版本冲突。
 
-## 第七章 构建你的智能体框架
-过度抽象的复杂性：许多框架为了追求通用性，引入了大量抽象层和配置选项。以LangChain为例，其链式调用机制虽然灵活，但对初学者而言学习曲线陡峭，往往需要理解大量概念才能完成简单任务。
-快速迭代带来的不稳定性：商业化框架为了抢占市场，API接口变更频繁。开发者经常面临版本升级后代码无法运行的困扰，维护成本居高不下。
-黑盒化的实现逻辑：许多框架将核心逻辑封装得过于严密，开发者难以理解Agent的内部工作机制，缺乏深度定制能力。遇到问题时只能依赖文档和社区支持，尤其是如果社区不够活跃，可能一个反馈意见会非常久也没有人推进，影响后续的开发效率。
-依赖关系的复杂性：成熟框架往往携带大量依赖包，安装包体积庞大，在需要与别的项目代码配合使用可能出现依赖冲突问题
+**HelloAgents** 框架的设计初衷：**让学习者既能快速上手，又能深入理解 Agent 的底层运行机制。**
 
-HelloAgents框架的设计围绕着一个核心问题展开：如何让学习者既能快速上手，又能深入理解Agent的工作原理？
-
-目录结构
+#### 目录结构
+```text
 hello-agents/
 ├── hello_agents/
-│   │
 │   ├── core/                     # 核心框架层
-│   │   ├── agent.py              # Agent基类
-│   │   ├── llm.py                # HelloAgentsLLM统一接口
-│   │   ├── message.py            # 消息系统
+│   │   ├── agent.py              # Agent 抽象基类
+│   │   ├── llm.py                # HelloAgentsLLM 统一接口
+│   │   ├── message.py            # 统一消息模型
 │   │   ├── config.py             # 配置管理
 │   │   └── exceptions.py         # 异常体系
 │   │
-│   ├── agents/                   # Agent实现层
-│   │   ├── simple_agent.py       # SimpleAgent实现
-│   │   ├── react_agent.py        # ReActAgent实现
-│   │   ├── reflection_agent.py   # ReflectionAgent实现
-│   │   └── plan_solve_agent.py   # PlanAndSolveAgent实现
+│   ├── agents/                   # Agent 实现层
+│   │   ├── simple_agent.py       # SimpleAgent 实现
+│   │   ├── react_agent.py        # ReActAgent 实现
+│   │   ├── reflection_agent.py   # ReflectionAgent 实现
+│   │   └── plan_solve_agent.py   # PlanAndSolveAgent 实现
 │   │
-│   ├── tools/                    # 工具系统层
-│   │   ├── base.py               # 工具基类
-│   │   ├── registry.py           # 工具注册机制
-│   │   ├── chain.py              # 工具链管理系统
-│   │   ├── async_executor.py     # 异步工具执行器
-│   │   └── builtin/              # 内置工具集
-│   │       ├── calculator.py     # 计算工具
-│   │       └── search.py         # 搜索工具
-└──
-pip install "hello-agents==0.1.1"
+│   └── tools/                    # 工具系统层
+│       ├── base.py               # 工具基类
+│       ├── registry.py           # 工具注册机制
+│       ├── chain.py              # 工具链管理系统
+│       ├── async_executor.py     # 异步工具执行器
+│       └── builtin/              # 内置工具集
+│           ├── calculator.py     # 计算工具
+│           └── search.py         # 搜索工具
+```
 
-my_llm.py
-HelloAgentsLLM 类，已经能够通过 api_key 和 base_url 这两个核心参数，连接任何兼容 OpenAI 接口的服务。这在理论上保证了通用性，但在实际应用中，不同的服务商在环境变量命名、默认 API 地址和推荐模型等方面都存在差异。如果每次切换服务商都需要用户手动查询并修改代码，会极大影响开发效率。为了解决这一问题，我们引入 provider。其改进思路是：让 HelloAgentsLLM 在内部处理不同服务商的配置细节，从而为用户提供一个统一、简洁的调用体验。
-继承HelloAgentsLLM，然后自定义一个my_llm.py来适应不同的LLM服务商，以魔搭为例。
-创建hello-agents\my_llm.py 继承HelloAgentsLLM类
-重写init方法，目标是：当用户传入 provider="modelscope"(或者其他服务商) 时，执行我们自定义的逻辑；否则，就调用父类 HelloAgentsLLM 的原始逻辑，使其能够继续支持 OpenAI 等其他内置的供应商。
-用这种方式，不修改 hello-agents 库源码的前提下，成功为其扩展了新的功能。
-可参考（llm.py为openai通用基类，适配大部分服务商，其他特殊服务商
-可以继承它自定义自己的LLM服务。比如modelscope_llm.py）
+#### 安装框架
+```bash
+pip install "hello-agents==0.1.1"
+```
+
+---
+
+### 7.2 适配不同的 LLM 服务
+
+`HelloAgentsLLM` 类已经能够通过 `api_key` 和 `base_url` 连接任何兼容 OpenAI 接口的服务。但在实际落地中，不同服务商在环境变量命名、默认 API 地址和推荐模型等方面均存在差异。如果每次切换服务商都需要用户手动查询并修改代码，会极大影响开发效率。
+
+为此我们引入 **Provider 机制**：让框架在内部统一处理不同服务商的配置细节，为用户提供简洁、一致的调用体验。
+
+#### 扩展实践：继承与重写（以魔搭 ModelScope 为例）
+在不侵入修改底层库源码的前提下，通过继承 `HelloAgentsLLM` 并创建自定义客户端 [`hello-agents/my_llm.py`](file:///e:/Desktop/github/hello-agent-learn/hello-agents/my_llm.py)：
+
+```python
+# hello-agents/my_llm.py
+import os
+from typing import Optional
+from openai import OpenAI
+from hello_agents import HelloAgentsLLM
+
+class MyLLM(HelloAgentsLLM):
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        provider: Optional[str] = "auto",
+        **kwargs
+    ):
+        if provider == "modelscope":
+            print("正在使用自定义的 ModelScope Provider")
+            self.provider = "modelscope"
+            self.api_key = api_key or os.getenv("MODELSCOPE_API_KEY")
+            self.base_url = base_url or "https://api-inference.modelscope.cn/v1/"
+            
+            if not self.api_key:
+                raise ValueError("ModelScope API key not found. Please set MODELSCOPE_API_KEY environment variable.")
+
+            self.model = model or os.getenv("LLM_MODEL_ID") or "Qwen/Qwen2.5-VL-72B-Instruct"
+            self.temperature = kwargs.get('temperature', 0.7)
+            self.max_tokens = kwargs.get('max_tokens')
+            self.timeout = kwargs.get('timeout', 60)
+            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
+        else:
+            # 非 modelscope 则完全复用父类原始逻辑，继续兼容 OpenAI 等官方或通用端点
+            super().__init__(model=model, api_key=api_key, base_url=base_url, provider=provider, **kwargs)
+```
+
+- **核心思路**：通过重写 `__init__`，当用户传入 `provider="modelscope"` 时执行自定义凭证解析与模型装配；否则直接调用 `super().__init__(...)` 保留内置兼容逻辑。
+
+---
+
+### 7.3 框架接口实现
+
+构建了 `HelloAgentsLLM` 这一核心通信组件后，还需要一套标准接口来处理数据流、管理配置与统一行为规范：
+- **`message.py`**：定义框架内统一的消息模型，规范智能体与模型间的数据流向；
+- **`config.py`**：集中化管理超参数与运行时配置，支持环境变量无缝覆盖；
+- **`agent.py`**：定义所有智能体的抽象基类，规范统一的执行入口与会话历史管理。
+
+#### 7.3.1 Message 类 (`core/message.py`)
+在智能体与大模型的交互中，对话历史是至关重要的上下文。
+- **类型安全保障**：通过 `typing.Literal["user", "assistant", "system", "tool"]` 严格约束角色（Role），完美对标 OpenAI API 规范；
+- **扩展元数据**：除 `content` 与 `role` 核心字段外，增加了 `timestamp` 与 `metadata`，为日志记录和未来功能扩展预留空间；
+- **对外兼容转换**：内置 `to_dict()` 方法，实现“对内信息丰富，对外标准兼容”。
+
+#### 7.3.2 Config 类 (`core/config.py`)
+将代码中零散硬编码的配置参数集中管理，解耦代码与环境。
+- **模块化分类**：划分为 LLM 配置、系统调试配置、历史长度限制等；
+- **合理默认值**：保证框架即使零配置也能开箱即用；
+- **环境驱动**：提供 `Config.from_env()` 类方法，支持通过 `.env` 环境变量覆盖默认配置。
+
+#### 7.3.3 Agent 抽象基类 (`core/agent.py`)
+框架的顶层抽象，强制所有具体智能体（如 SimpleAgent、ReActAgent）遵循同套接口规范。
+- **抽象规范与强制实现**：继承 Python 的 `abc.ABC`，通过 `@abstractmethod` 装饰的 `run(self, input_text: str, **kwargs) -> str` 强制子类必须实现具体执行逻辑，确保对外调用入口一致；
+- **核心依赖注入**：构造函数清晰定义了智能体的必备依赖：名称（`name`）、模型客户端（`llm`）、系统提示词（`system_prompt`）与配置项（`config`）；
+- **通用会话状态维护**：基类内置历史记录管理方法（`add_message`、`get_history`、`clear_history`），与 `Message` 组件紧密协同。
+
+> 🎉 **阶段总结**：至此，HelloAgents 框架的核心基础组件（通信、消息、配置、抽象基类）已全部规范落地。

@@ -982,3 +982,12 @@ hello-agents/
 │   │       └── search.py         # 搜索工具
 └──
 pip install "hello-agents==0.1.1"
+
+my_llm.py
+HelloAgentsLLM 类，已经能够通过 api_key 和 base_url 这两个核心参数，连接任何兼容 OpenAI 接口的服务。这在理论上保证了通用性，但在实际应用中，不同的服务商在环境变量命名、默认 API 地址和推荐模型等方面都存在差异。如果每次切换服务商都需要用户手动查询并修改代码，会极大影响开发效率。为了解决这一问题，我们引入 provider。其改进思路是：让 HelloAgentsLLM 在内部处理不同服务商的配置细节，从而为用户提供一个统一、简洁的调用体验。
+继承HelloAgentsLLM，然后自定义一个my_llm.py来适应不同的LLM服务商，以魔搭为例。
+创建hello-agents\my_llm.py 继承HelloAgentsLLM类
+重写init方法，目标是：当用户传入 provider="modelscope"(或者其他服务商) 时，执行我们自定义的逻辑；否则，就调用父类 HelloAgentsLLM 的原始逻辑，使其能够继续支持 OpenAI 等其他内置的供应商。
+用这种方式，不修改 hello-agents 库源码的前提下，成功为其扩展了新的功能。
+可参考（llm.py为openai通用基类，适配大部分服务商，其他特殊服务商
+可以继承它自定义自己的LLM服务。比如modelscope_llm.py）

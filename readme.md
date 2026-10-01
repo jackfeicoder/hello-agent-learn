@@ -1071,3 +1071,82 @@ class MyLLM(HelloAgentsLLM):
 - **通用会话状态维护**：基类内置历史记录管理方法（`add_message`、`get_history`、`clear_history`），与 `Message` 组件紧密协同。
 
 > 🎉 **阶段总结**：至此，HelloAgents 框架的核心基础组件（通信、消息、配置、抽象基类）已全部规范落地。
+
+---
+
+### 7.4 智能体进阶实战：自定义增强智能体（MySimpleAgent）
+
+基于 `SimpleAgent` 进行扩展，实现了一个集成了**基于提示词协议的工具调用（ReAct 循环）**、**流式打字机交互**与**动态工具生命周期管理**的自定义智能体实现 [`hello-agents/agents/my_simple_agent.py`](file:///e:/Desktop/github/hello-agent-learn/hello-agents/agents/my_simple_agent.py)。
+
+#### 7.4.1 核心设计定位
+与大模型厂商专属的 Function Calling 绑定不同，`MySimpleAgent` 采用通用性极强且对各类开源/闭源模型均友好的 **Prompt Engineering 文本协议**：
+1. **注入协议**：在 System Prompt 中动态告知大模型当前注册的可用工具以及调用标记规范（`[TOOL_CALL:tool_name:parameters]`）；
+2. **截获意图**：通过正则表达式引擎拦截模型生成文本中的工具调用指令；
+3. **本地执行**：安全分发并执行本地注册的工具，捕获异常防止崩溃；
+4. **结果回传**：将工具观察结果（Observation）包装为新的上下文回填至模型，形成“思考-行动-观察（ReAct）”闭环；
+5. **记忆隔离**：ReAct 中间的工具指令不污染长期历史，最终仅保留用户的原始问题与最终自然语言答案。
+
+#### 7.4.2 核心方法剖析
+
+| 方法名称 | 类型 | 职责说明 |
+| :--- | :--- | :--- |
+| `__init__` | 构造函数 | 初始化 Agent 基础属性，注入工具注册表 `tool_registry`，初始化工具调用开关。 |
+| `run` | 核心入口 | 任务执行主入口。依据 `enable_tool_calling` 开关自动分流为**基础对话**或**工具增强循环**。 |
+| `_get_enhanced_system_prompt` | 内部方法 | 动态提示词工程。合并基础 Prompt 与工具描述、调用语法协议说明。 |
+| `_run_with_tools` | 内部方法 | **ReAct 循环控制中枢**。在 `max_tool_iterations` 限制内交替执行模型推理与工具调用。 |
+| `_parse_tool_calls` | 内部方法 | 正则匹配引擎。提取文本中的 `[TOOL_CALL:name:params]` 指令列表。 |
+| `_execute_tool_call` | 内部方法 | 工具执行网关。安全调用本地工具实例并捕获处理异常。 |
+| `_parse_tool_parameters` | 内部方法 | 智能参数推导。支持单参数或键值对（`k=v`）形式传参。 |
+| `stream_run` | 生成器方法 | 实时流式响应接口。通过 `yield chunk` 实时返回增量 token 并归档完整历史。 |
+| `add_tool` / `remove_tool` / `list_tools` / `has_tools` | 工具管理 | 动态注册、注销、列举工具，支持工具注册表的懒加载初始化。 |
+
+#### 7.4.3 三大执行链路详解
+
+##### 1. 基础对话链路（无工具 / 工具禁用）
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 用户
+    participant Agent as MySimpleAgent.run
+    participant Memory as self._history (记忆)
+    participant LLM as HelloAgentsLLM
+
+    User->>Agent: input_text ("你好")
+    Agent->>Memory: 获取历史消息列表
+    Agent->>Agent: 拼接 System + History + User
+    Agent->>LLM: invoke(messages)
+    LLM-->>Agent: 返回响应文本
+    Agent->>Memory: 存入 User 提问与 Assistant 回答
+    Agent-->>User: 输出结果
+```
+
+##### 2. 工具增强 ReAct 闭环链路（启用工具）
+```mermaid
+flowchart TD
+    Start([用户输入: input_text]) --> Prompt[构建增强系统提示词\n注入工具列表与协议说明]
+    Prompt --> MsgInit[组装上下文消息 messages\nSystem + History + User]
+    MsgInit --> LoopStart{当前迭代 < max_iterations?}
+    
+    LoopStart -- 是 --> LLMCall[调用 self.llm.invoke(messages)]
+    LLMCall --> Parse[正则解析: _parse_tool_calls\n检查是否有 TOOL_CALL 标记]
+    
+    Parse -- 存在工具调用 --> ExecTools[执行工具: _execute_tool_call\n智能参数解析 ➔ tool.run]
+    ExecTools --> AppendContext[将模型回复剥离标记后放入 messages\n将工具执行结果包装成 user 消息追加进 messages]
+    AppendContext --> IncIteration[迭代次数 +1] --> LoopStart
+    
+    Parse -- 无工具调用\n直接给出回答 --> BreakLoop[得到最终回答 final_response]
+    LoopStart -- 超出迭代次数 --> Fallback[最后强制调用一次 LLM] --> BreakLoop
+    
+    BreakLoop --> SaveMem[保存记忆:\n用户原始输入 ➔ 历史\n最终回答 ➔ 历史]
+    SaveMem --> End([输出最终结果给用户])
+```
+
+##### 3. 流式响应链路（`stream_run`）
+通过 Python 生成器函数（Generator）实时产出模型 token，上层调用者可以实现打字机动态效果，同时在流结束时自动把完整对话录入历史记忆，兼顾低延迟体验与上下文连续性。
+
+#### 7.4.4 核心组件协同关系
+
+- **提示词（Prompts）**：充当大模型识别工具能力与输出规范的“操作说明书”；
+- **记忆（Memory）**：隔离临时执行上下文与长期历史，确保多轮对话干净连贯；
+- **模型（LLM）**：作为思考决策核心，决定何时对话、何时行动；
+- **工具（Tools）**：扩展模型物理边界，赋予模型精准数学计算、外部检索等实际能力。

@@ -1150,3 +1150,29 @@ flowchart TD
 - **记忆（Memory）**：隔离临时执行上下文与长期历史，确保多轮对话干净连贯；
 - **模型（LLM）**：作为思考决策核心，决定何时对话、何时行动；
 - **工具（Tools）**：扩展模型物理边界，赋予模型精准数学计算、外部检索等实际能力。
+
+#### 7.4.5 ReActAgent
+提示词的位置：
+方案一：独立 prompts/ 目录存放 Markdown 文件（⭐ 最推荐的工程实践）
+hello-agents/
+├── prompts/
+│   ├── system_base.md          # 通用角色人设
+│   ├── tool_react.md           # ReAct 工具调用协议说明
+│   └── plan_solve.md           # 规划与拆解提示
+from pathlib import Path
+PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
+def load_prompt(template_name: str) -> str:
+    template_path = PROMPT_DIR / template_name
+    return template_path.read_text(encoding="utf-8")
+
+方案二：独立 Python 模块/常量文件（适合轻量项目/快速开发
+示例（hello-agents/prompts.py）：
+
+DEFAULT_SYSTEM_PROMPT = """你是一个有用的AI助手。"""
+
+
+#### 7.4.6 ReflectionAgent
+
+#### 7.4.7 PlanAndSolveAgent
+
+#### 7.4.8 FunctionCallAgent
